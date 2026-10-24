@@ -1,5 +1,6 @@
 {
   "name": "daymark",
+  "license": "GPL-3.0-only",
   "private": true,
   "version": "1.18.1",
   "type": "module",
