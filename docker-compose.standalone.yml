@@ -1,0 +1,113 @@
+name: daymark
+services:
+  database:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: diary
+      POSTGRES_USER: diary_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    volumes:
+      - diary_database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks: [diary_internal]
+  diary:
+    build: .
+    image: daymark:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DB_HOST: database
+      DB_PORT: 5432
+      DB_NAME: diary
+      DB_USER: diary_user
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      DATABASE_SSL: "false"
+      DATABASE_POOL_SIZE: 10
+      JSON_LIMIT: 30mb
+      COOKIE_SECURE: "false"
+      MINIO_HOST: minio
+      MINIO_PORT: 9000
+      MINIO_BUCKET: field-log-media
+      MINIO_ACCESS_KEY: fieldlog
+      MINIO_SECRET_KEY: "${MINIO_PASSWORD:?Set MINIO_PASSWORD in .env}"
+      MEDIA_FILE_LIMIT: 52428800
+      STORAGE_QUOTA: 5368709120
+      SMTP_HOST: mail
+      SMTP_PORT: 1025
+      MAIL_FROM: "Daymark <field-log@localhost>"
+      AUTH_ENCRYPTION_KEY: "${AUTH_ENCRYPTION_KEY:?Set AUTH_ENCRYPTION_KEY in .env}"
+      BACKUP_PATH: /backups
+    volumes:
+      - diary_backups:/backups
+      - diary_media:/minio-data:ro
+    depends_on:
+      database:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks: [diary_internal]
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: fieldlog
+      MINIO_ROOT_PASSWORD: "${MINIO_PASSWORD:?Set MINIO_PASSWORD in .env}"
+    volumes:
+      - diary_media:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [diary_internal]
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: database
+      PGPORT: 5432
+      PGDATABASE: diary
+      PGUSER: diary_user
+      PGPASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    command:
+      [
+        "/bin/sh",
+        "-ec",
+        "chown 1000:1000 /backups; while true; do stamp=$$(date -u +%Y-%m-%dT%H-%M-%SZ); pg_dump --format=custom --file=/backups/diary-$${stamp}.dump; tar -czf /backups/media-$${stamp}.tar.gz -C /minio-data .; find /backups -type f -mtime +14 -delete; sleep 86400; done",
+      ]
+    volumes:
+      - diary_backups:/backups
+      - diary_media:/minio-data:ro
+    depends_on:
+      database:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks: [diary_internal]
+  mail:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_DATABASE: /data/mailpit.db
+    volumes:
+      - diary_mail:/data
+    networks: [diary_internal]
+volumes:
+  diary_database:
+  diary_media:
+  diary_backups:
+  diary_mail:
+networks:
+  diary_internal:
+    driver: bridge

@@ -1,0 +1,28 @@
+{
+  "name": "Daymark",
+  "short_name": "Daymark",
+  "description": "Private self-hosted notes, diary entries, and media.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#1a1b26",
+  "theme_color": "#1a1b26",
+  "icons": [
+    {
+      "src": "/field-log-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "New entry", "short_name": "New", "url": "/?new=1" },
+    { "name": "Gallery", "short_name": "Gallery", "url": "/?view=gallery" },
+    { "name": "Map", "short_name": "Map", "url": "/?view=map" }
+  ],
+  "share_target": {
+    "action": "/?share=1",
+    "method": "GET",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  }
+}
